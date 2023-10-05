@@ -1,0 +1,119 @@
+---
+title: "data_exploration"
+output: html_document
+date: "2023-09-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+```
+
+
+```{r}
+setwd("/Users/NandhiniSridhar/Desktop/honors_thesis")
+mfdata <- read_excel("mix-market-financial-performance-dataset-in-usd.xlsx")
+#View(mfdata)
+
+country_data <- read_excel("COUNTRY_CODEBOOKmix-market-mfi-company-metadata.xlsx")
+#View(country_data)
+
+names(mfdata) <- gsub(' ', '_', names(mfdata))
+names(country_data) <- gsub(' ', '_', names(country_data))
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+names(country_data)
+ggplot(country_data, aes(x=Country)) + 
+  geom_bar() +
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
+```
+```{r}
+south_asia <- c("Sri Lanka", "Bangladesh", "India", "Afghanistan", "Pakistan", "Bhutan", "Nepal", "Maldives")
+country_data %>% filter(Country %in% south_asia)
+
+mfdata['country'] <- NA
+countries <- c()
+enter <- c()
+ifc <- c()
+elsec <- c()
+names <- c()
+
+#get the countries of each bank in the mfi dataset
+for (i in 1:nrow(mfdata)) {
+  mfi_name <- mfdata$MFI_Name[i]
+  enter <- enter %>% append(1)
+  
+  if(mfi_name %in% country_data$MFI_Name){
+    ifc <- ifc %>% append(1)
+    country_name <- country_data$Country[country_data$MFI_Name == mfi_name]
+    names <- names %>% append(length(country_name))
+    countries <- countries %>% append(country_name)
+    #mfdata[i, 'country'] <- country_name
+  }
+  else{
+    elsec <- elsec %>% append(1)
+    countries <- countries %>% append("NOT FOUND")
+  }
+}
+
+# get rid of ones with multiple countries
+names2 <- c()
+for(i in 1:length(names)){
+  if(names[i] == 2){
+    names2 <- names2 %>% append(1)
+    cat(names[i], ": ", countries[i], "\n")
+    countries <- countries[-i]
+  }
+}
+
+#append to mfi dataset
+mfdata$country <- countries
+```
+
+
+```{r}
+#filter to just countries in the south asia region and plot histogram of distribution
+mfdata <- mfdata %>% filter(country %in% south_asia)
+print(unique(mfdata$country))
+
+ggplot(mfdata, aes(x=country)) + 
+  geom_bar() +
+  theme(axis.text.x = element_text(size=10, angle = 45, vjust = 1, hjust=1))
+
+mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+mfi_names <- unique(mfdata$MFI_Name)
+for(i in mfi_names){
+  temp <- mfdata %>% filter(MFI_Name == i)
+  cat()
+}
+
+#mfdata <- mfdata %>% drop_na(Gross_Loan_Portfolio)
+#mfdata <- mfdata %>% drop_na(Number_of_active_borrowers)
+#mfdata <- mfdata %>% drop_na(Number_of_loans_outstanding)
+#mfdata <- mfdata %>% drop_na(Number_of_transactions)
+
+
+
+sum(is.na(mfdata$Number_of_loans_disbursed))
+
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
