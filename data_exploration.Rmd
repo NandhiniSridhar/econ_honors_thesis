@@ -22,7 +22,7 @@ library(ggplot2)
 
 
 ```{r}
-setwd("/Users/NandhiniSridhar/Desktop/honors_thesis")
+setwd("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance")
 mfdata <- read_excel("mix-market-financial-performance-dataset-in-usd.xlsx")
 #View(mfdata)
 
@@ -96,21 +96,43 @@ ggplot(mfdata, aes(x=country)) +
   geom_bar() +
   theme(axis.text.x = element_text(size=10, angle = 45, vjust = 1, hjust=1))
 
-mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+annual <- mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+annual$first <- 9999
+annual$last <- 9999
+
+quarter <- mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "QTR") %>% arrange(MFI_Name, Fiscal_Year)
+quarter$first <- 9999
+quarter$last <- 9999
+
 mfi_names <- unique(mfdata$MFI_Name)
 for(i in mfi_names){
-  temp <- mfdata %>% filter(MFI_Name == i)
-  cat()
+ temp <- annual %>% filter(MFI_Name == i)
+ temp_qtr <- quarter %>% filter(MFI_Name == i)
+ 
+ first_year = min(temp$Fiscal_Year)
+ last_year = max(temp$Fiscal_Year)
+ first_qtr = min(temp_qtr$Fiscal_Year)
+ last_qtr = max(temp_qtr$Fiscal_Year)
+
+ 
+ annual$first[annual$MFI_Name == i] <- first_year
+ annual$last[annual$MFI_Name == i] <- last_year
+ quarter$first[quarter$MFI_Name == i] <- first_qtr
+ quarter$last[quarter$MFI_Name == i] <- last_qtr
 }
+
+#does not work!!!
+for(i in mfi_name){
+  print(annual$first[annual$MFI_Name == i])
+}
+
 
 #mfdata <- mfdata %>% drop_na(Gross_Loan_Portfolio)
 #mfdata <- mfdata %>% drop_na(Number_of_active_borrowers)
 #mfdata <- mfdata %>% drop_na(Number_of_loans_outstanding)
 #mfdata <- mfdata %>% drop_na(Number_of_transactions)
-
-
-
-sum(is.na(mfdata$Number_of_loans_disbursed))
+t
+#sum(is.na(mfdata$Number_of_loans_disbursed))
 
 
 
