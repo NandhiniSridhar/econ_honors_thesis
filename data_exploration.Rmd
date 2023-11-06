@@ -100,25 +100,27 @@ annual <- mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% fil
 annual$first <- 9999
 annual$last <- 9999
 
-quarter <- mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "QTR") %>% arrange(MFI_Name, Fiscal_Year)
-quarter$first <- 9999
-quarter$last <- 9999
+#quarter <- mfdata %>% select(MFI_Name, Fiscal_Year, Period_Type, country) %>% filter(Period_Type == "QTR") %>% arrange(MFI_Name, Fiscal_Year)
+#quarter$first <- 9999
+#quarter$last <- 9999
 
 mfi_names <- unique(mfdata$MFI_Name)
+
+
 for(i in mfi_names){
  temp <- annual %>% filter(MFI_Name == i)
- temp_qtr <- quarter %>% filter(MFI_Name == i)
+ #temp_qtr <- quarter %>% filter(MFI_Name == i)
  
  first_year = min(temp$Fiscal_Year)
  last_year = max(temp$Fiscal_Year)
- first_qtr = min(temp_qtr$Fiscal_Year)
- last_qtr = max(temp_qtr$Fiscal_Year)
+ #first_qtr = min(temp_qtr$Fiscal_Year)
+ #last_qtr = max(temp_qtr$Fiscal_Year)
 
  
  annual$first[annual$MFI_Name == i] <- first_year
  annual$last[annual$MFI_Name == i] <- last_year
- quarter$first[quarter$MFI_Name == i] <- first_qtr
- quarter$last[quarter$MFI_Name == i] <- last_qtr
+ #quarter$first[quarter$MFI_Name == i] <- first_qtr
+ #quarter$last[quarter$MFI_Name == i] <- last_qtr
 }
 
 
@@ -128,10 +130,211 @@ ggplot(annual, aes(x=country)) +
 #mfdata <- mfdata %>% drop_na(Gross_Loan_Portfolio)
 #mfdata <- mfdata %>% drop_na(Number_of_active_borrowers)
 ```
+```{r}
+ranges <- data.frame(matrix(ncol=3, nrow=0))
+colnames(ranges) <- c('MFI_Name', 'Country', 'Year')
+annual <- mfdata %>% filter(Period_Type == "ANN")
+mfi_names <- unique(mfdata$MFI_Name)
+
+mfdata <- mfdata %>% drop_na("MFI_Name")
+mfdata <- mfdata %>% drop_na("country")
+mfdata <- mfdata %>% drop_na("Fiscal_Year")
+
+
+# count = 1
+#country_name <- country_data$Country[country_data$MFI_Name == mfi_name]
+
+for(i in mfi_names){
+  temp <- annual %>% filter(MFI_Name == i)
+  country <- annual$country[annual$MFI_Name == i]
+  country <- country[1]
+  first <- min(temp$Fiscal_Year)
+  last <- max(temp$Fiscal_Year)
+  #cat(i, country, first, last, "\n")
+  ranges[nrow(ranges) + 1, ] = c(i, country, first)
+  ranges[nrow(ranges) + 1, ] = c(i, country, last)
+
+}
+
+drop_na(ranges)
+```
+
+DO NOT RUN THE FOLLOWING THREE CODE CHUNKS UNLESS YOU HAVE 10 MINUTES TO SPARE
+```{r}
+
+#graph year ranges for each mfi in india
+#this is a dumbell plot
+india <- ranges %>% filter(Country == "India")
+
+india <- india %>%
+  mutate(paired = rep(1:(n()/2),each=2),
+         Year=factor(Year))
+
+india <- india %>% mutate(facet_condition = ifelse(row_number() <= nrow(india)/2, 1, 2))
+india %>% ggplot(aes(x= Year, y=MFI_Name)) +
+  geom_line(aes(group = paired))+
+    geom_point(aes(color=Year), size=4)
+
+```
+```{r}
+south_asia <- south_asia[-8] #remove Maldives from list since zero entries
+for(i in south_asia){
+  cur_country <- ranges %>% filter(Country == i)
+  cur_country <- cur_country %>%
+  mutate(paired = rep(1:(n()/2),each=2),
+         Year=factor(Year))
+
+  cur_country <- cur_country %>% mutate(facet_condition = ifelse(row_number() <= nrow(cur_country)/2, 1, 2))
+  plot <- cur_country %>% ggplot(aes(x= Year, y=MFI_Name)) +
+    geom_line(aes(group = paired))+
+      geom_point(aes(color=Year), size=4) +
+    labs(title = i)
+  print(plot)
+}
+```
+^ Based on the above, I don't want to include Bhutan in the analysis because there is only one MFI reported.
+
+```{r}
+#histogram of GLP or percent of GLP to female borrowers over time
+#probably by country
+
+#mfi names is unique MFI names in mfdata
+
+afghanistan <- mfdata %>% filter(country == "Afghanistan", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+sri_lanka <- mfdata %>% filter(country == "Sri Lanka", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+bangaladesh <- mfdata %>% filter(country == "Bangladesh", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+india <- mfdata %>% filter(country == "India", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+pakistan <- mfdata %>% filter(country == "Pakistan", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+nepal <- mfdata %>% filter(country == "Nepal", Period_Type=="ANN") %>% drop_na(Percent_of_female_borrowers)
+
+for(i in mfi_names){
+  if(i %in% afghanistan$MFI_Name){
+    temp <- afghanistan %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("Afghanistan: ", i))
+    print(plot)
+  }
+}
+
+for(i in mfi_names){
+  if(i %in% sri_lanka$MFI_Name){
+    temp <- sri_lanka %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("Sri Lanka: ", i))
+    print(plot)
+  }
+}
+
+for(i in mfi_names){
+  if(i %in% bangaladesh$MFI_Name){
+    temp <- bangaladesh %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("Bangladesh: ", i))
+    print(plot)
+  }
+}
+
+for(i in mfi_names){
+  if(i %in% india$MFI_Name){
+    temp <- india %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("India: ", i))
+    print(plot)
+  }
+}
+
+for(i in mfi_names){
+  if(i %in% pakistan$MFI_Name){
+    temp <- pakistan %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("Pakistan: ", i))
+    print(plot)
+  }
+}
+
+for(i in mfi_names){
+  if(i %in% nepal$MFI_Name){
+    temp <- nepal %>% filter(MFI_Name == i)
+    plot <- temp %>% ggplot(aes(x=Fiscal_Year, y=Percent_of_female_borrowers)) +
+      geom_line() +
+      geom_point() + 
+      labs(title = paste("Nepal: ", i))
+    print(plot)
+  }
+}
+
+
+```
+
 
 
 ```{r}
+annual_mf <- mfdata %>% filter(Period_Type == "ANN")  %>% arrange(MFI_Name, Fiscal_Year)
+annual_mf <- annual_mf %>% drop_na(Gross_Loan_Portfolio)
+annual_mf <- annual_mf %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Male`)
+annual_mf <- annual_mf %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
 
+annual_mf$ratio_female_male <- annual_mf$`Number_of_active_borrowers_>_Gender_>_Female`/ annual_mf$`Number_of_active_borrowers_>_Gender_>_Male`
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+NOT USING
+
+```{r}
+#do the same dumbbell plot for every country
+
+#india <- ranges %>% filter(Country == "India")
+drop_na(ranges)
+
+ranges <- ranges %>%
+  mutate(paired = rep(1:(n()/2),each=2),
+         Year=factor(Year))
+
+ranges <- ranges %>% mutate(facet_condition = ifelse(row_number() <= nrow(ranges)/2, 1, 2))
+ranges %>% ggplot(aes(x= Year, y=MFI_Name)) +
+  geom_line(aes(group = paired))+
+  facet_wrap(~Country, ncol=1)
+    geom_point(aes(color=Year), size=4)
+    
+```
+```{r}
+#for every year, add up all the counties' loan portfolios, number of active borrowers for male and female
+#cols: country, fiscal year, glp (gross loan portfolio), number borrowers female, number borrowers male
+totals <- data.frame(matrix(ncol=5, nrow=0))
+colnames(totals) <- c('Country', 'Fiscal_Year', 'Gross_Loan_Portfolio', 'Female_Borrowers', 'Male_Borrowers')
+
+
+```
+
+
+```{r}
 annual_mf <- mfdata %>% filter(Period_Type == "ANN")  %>% arrange(MFI_Name, Fiscal_Year)
 annual_mf <- annual_mf %>% drop_na(Gross_Loan_Portfolio)
 annual_mf <- annual_mf %>% drop_na(`Gross_Loan_Portfolio_>_Credit_Products__>_Enterprise_Finance`)
@@ -140,7 +343,10 @@ annual_mf <- annual_mf %>% drop_na(`Gross_Loan_Portfolio_>_Credit_Products__>_Ho
 annual_mf$enterprise_ratio <- annual_mf$`Gross_Loan_Portfolio_>_Credit_Products__>_Enterprise_Finance` / annual_mf$Gross_Loan_Portfolio
 
 annual_mf$household_ratio <- annual_mf$`Gross_Loan_Portfolio_>_Credit_Products__>_Household_Financing` / annual_mf$Gross_Loan_Portfolio
+```
 
+
+```{r}
 #to test
 annual_mf$enterprise_ratio
 annual_mf$household_ratio
