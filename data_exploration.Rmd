@@ -121,9 +121,9 @@ for(i in mfi_names){
 }
 
 
-ggplot(annual, aes(x=country)) + 
-  geom_bar() +
-  theme(axis.text.x = element_text(size=10, angle = 45, vjust = 1, hjust=1))
+#ggplot(annual, aes(x=country)) + 
+#  geom_bar() +
+#  theme(axis.text.x = element_text(size=10, angle = 45, vjust = 1, hjust=1))
 #mfdata <- mfdata %>% drop_na(Gross_Loan_Portfolio)
 #mfdata <- mfdata %>% drop_na(Number_of_active_borrowers)
 ```

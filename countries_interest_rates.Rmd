@@ -1,0 +1,174 @@
+---
+title: "countries_interest_rates"
+author: "Nandhini Sridhar"
+output: html_document
+date: "2023-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+```
+
+
+```{r}
+setwd("/Users/NandhiniSridhar/Desktop/econ_honors_thesis")
+mfdata <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/mix-market-financial-performance-dataset-in-usd.xlsx")
+#View(mfdata)
+
+country_data <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/COUNTRY_CODEBOOKmix-market-mfi-company-metadata.xlsx")
+#View(country_data)
+
+names(mfdata) <- gsub(' ', '_', names(mfdata))
+names(country_data) <- gsub(' ', '_', names(country_data))
+
+ir <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/Interest_Rates.xlsx")
+colnames(ir)
+cols <- c("Country", "Scale", "Base Year")
+for (i in 2000:2021){
+  cols <- cols %>% append(i)
+}
+print(cols)
+names(ir) <- cols
+ir <- ir[6:nrow(ir),]
+```
+
+```{r}
+mfdata['Country'] <- NA
+countries <- c()
+enter <- c()
+ifc <- c()
+elsec <- c()
+names <- c()
+
+#get the countries of each bank in the mfi dataset
+for (i in 1:nrow(mfdata)) {
+  mfi_name <- mfdata$MFI_Name[i]
+  enter <- enter %>% append(1)
+  
+  if(mfi_name %in% country_data$MFI_Name){
+    ifc <- ifc %>% append(1)
+    country_name <- country_data$Country[country_data$MFI_Name == mfi_name]
+    names <- names %>% append(length(country_name))
+    countries <- countries %>% append(country_name)
+    #mfdata[i, 'country'] <- country_name
+  }
+  else{
+    elsec <- elsec %>% append(1)
+    countries <- countries %>% append("NOT FOUND")
+  }
+}
+
+# get rid of ones with multiple countries
+names2 <- c()
+for(i in 1:length(names)){
+  if(names[i] == 2){
+    names2 <- names2 %>% append(1)
+    cat(names[i], ": ", countries[i], "\n")
+    countries <- countries[-i]
+  }
+}
+
+#append to mfi dataset
+mfdata$Country <- countries
+```
+
+```{r}
+#arrange by MFI name and fiscal year
+library(fuzzyjoin)
+mfdata <- mfdata %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+#mfdata['country_reduced'] <- gsub(",.*", "", mfdata$country)
+#mfdata['country_reduced'] <- gsub("\\(.*", "", mfdata$country)
+#names(country_data) <- gsub(' ', '_', names(country_data))
+
+mf_interest <- stringdist_join(mfdata, ir, 
+                by='Country', 
+                mode='left',
+                method = "soundex") %>%
+  arrange(Country.x)
+
+
+#Ratio_GLP_Female is the y variable - the percentage of loan money that goes to women borrowers
+mf_interest %>% drop_na(`Gross_Loan_Portfolio`)
+mf_interest %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
+
+mf_interest$Ratio_GLP_Female = mf_interest$`Gross_Loan_Portfolio_>_Gender_>_Female` / mf_interest$Gross_Loan_Portfolio
+
+```
+
+```{r}
+#encode by region
+#World Bank region classifications: Africa, East Asia & the Pacific, Europe & Central Asia, Latin America & The Caribbean, Middle East & North Africa, South Asia
+africa <- c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cameroon", "Cabo Verde", "Central African Republic", "Chad", "Comoros", "Cote d'Ivore", "Cote d'Ivoire (Ivory Coast)", "Congo", "Congo, Democratic Republic of the","Congo, Republic of the", "Equitorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Ghana", "Gambia", "Gambia, The", "Guinea", "Guinea-Bissau", "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritus", "Mozambique", "Nambia", "Niger", "Nigeria", "Rwanda", "Senegal", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe", "Namibia", "Swaziland")
+
+east_asia_pacific <- c("Cambodia", "China", "China, People's Republic of", "Indonesia", "Korea", "Lao PDR", "Malaysia", "Mongolia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam", "East Timor", "Laos", "Myanmar (Burma)", "Samoa", "Solomon Islands", "Tonga", "Vanuatu")
+
+europe_central_asia <- c("Albania", "Armenia", "Azerbaijan", "Belarus", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Georgia", "Hungary", "Kazakhstan", "Kosovo", "Kyrgyzstan", "Moldova", "Montenegro", "Macedonia", "Poland", "Romania", "Russia", "Serbia", "Tajikistan", "Turkey", "Turkmenistan", "Ukraine", "Uzbekistan", "Slovakia")
+
+latin_america_caribbean <- c("Argentina", "Belize", "Bolivia", "Brazil", "Colombia", "Chile", "Costa Rica", "Dominican Republic", "Ecuador", "El Salvador", "Grenada", "Guatemala", "Guyana", "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua", "Panama", "Paraguay", "Peru", "Saint Lucia", "Suriname", "Trinidad and Tobago", "Uruguay", "Venezuela", "Fiji")
+
+middle_east_north_africa <- c("Algeria", "Bahrain", "Djibouti", "Egypt", "Iran", "Iraq", "Jordan", "Kuwait", "Lebanon", "Libya", "Morocco", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "Tunisia", "United Arab Emirates", "Yemen", "Israel")
+
+south_asia <- c("Sri Lanka", "Bangladesh", "India", "Afghanistan", "Pakistan", "Bhutan", "Nepal", "Maldives")
+
+north_america <- c("United States", "Canada")
+
+mf_interest <- mf_interest %>% 
+  mutate(Region = case_when(
+    Country.x %in% africa ~ 'Africa',
+    Country.x %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country.x %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country.x %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country.x %in% north_america ~ 'North_America',
+    Country.x %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country.x %in% south_asia ~ 'South_Asia',
+    TRUE ~ 'Other'))
+
+x <- mf_interest %>% filter(Region == "Other") %>% select(Country.x)
+print(unique(x))
+```
+
+
+```{r}
+library(lfe)
+
+#basic model, no fixed effects
+basic_linear <- lm(Ratio_GLP_Female ~ Gross_Loan_Portfolio, data=mf_interest)
+summary(basic_linear)
+
+basic_log <- lm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio), data=mf_interest)
+summary(basic_log)
+
+
+#With time and mfi fixed effects
+#the 0 means no instrumental variables
+#what standard error clustering dim do i use (right now doing it by mfi)
+time_mfi_fe <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | MFI_Name + Fiscal_Year | 0 | MFI_Name, mf_interest)
+summary(time_mfi_fe)
+
+#include region fixed effects
+time_region_fe <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | Region + Fiscal_Year | 0 | MFI_Name, mf_interest)
+summary(time_region_fe)
+
+```
+```{r}
+#instrumental variable regression
+#instrumental variable is the interest rate for a given year
+
+
+
+```
+
+```{r}
+#to run above
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
