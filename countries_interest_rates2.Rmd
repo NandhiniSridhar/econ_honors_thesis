@@ -16,6 +16,13 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readxl)
 library(ggplot2)
+library(fuzzyjoin) #fuzzy matching of strings
+library(lfe) #fixed effects regression
+library(fixest) #fixed effects regression
+
+#packages
+#lfe - install.packages("lfe")
+#fixest - install.packages("fixest")
 ```
 
 DATA CLEANING
@@ -83,7 +90,6 @@ mfdata$Country <- countries
 
 ```{r}
 #arrange by MFI name and fiscal year
-library(fuzzyjoin)
 mfdata <- mfdata %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
 #mfdata['country_reduced'] <- gsub(",.*", "", mfdata$country)
 #mfdata['country_reduced'] <- gsub("\\(.*", "", mfdata$country)
@@ -123,7 +129,7 @@ north_america <- c("United States", "Canada")
 
 mf_interest <- mf_interest %>% 
   mutate(Region = case_when(
-    Country.x %in% africa ~ 'Africa',
+    Country.x %in% africa ~ 'Sub_Saharan_Africa',
     Country.x %in% east_asia_pacific ~ 'East_Asia_Pacific',
     Country.x %in% europe_central_asia ~ 'Europe_Central_Asia',
     Country.x %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
@@ -163,23 +169,56 @@ mf_interest$Cur_Interest_Rate <- as.numeric(mf_interest$Cur_Interest_Rate)
 ```
 
 ```{r}
-working_mf_interest <- mf_interest %>% filter(Cur_Interest_Rate != 9999)
-working_mf_interest <- working_mf_interest %>% drop_na("Cur_Interest_Rate")
-
 mf_interest <- mf_interest %>% drop_na("Gross_Loan_Portfolio")
 mf_interest <- mf_interest %>% drop_na("Ratio_GLP_Female")
+mf_interest <- mf_interest %>% drop_na("Percent_of_female_borrowers")
+
+
+working_mf_interest <- mf_interest %>% filter(Cur_Interest_Rate != 9999)
+working_mf_interest <- working_mf_interest %>% drop_na("Cur_Interest_Rate")
 ```
 
 ```{r}
 #run everything above this to clean and preprocess data
 ```
 
+BACKGROUND INFO + TABLES / DATA EXPLORATION
+```{r}
+#mfdata - all MIX Market data
+print(length(unique(mfdata$MFI_Name)))
+print(length(unique(mfdata$Country.x)))
+
+ggplot(mfdata, aes(x=Country)) + 
+  geom_bar() +
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
+```
+
+```{r}
+#working data - mfis with interest data fir relevant years
+print(length(unique(working_mf_interest$MFI_Name)))
+print(length(unique(working_mf_interest$Country.x)))
+
+ggplot(working_mf_interest, aes(x=Country.x)) + 
+  geom_bar() +
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
+
+#use for GLP, %women borrowers, %GLP to women over time for all data
+min <- min(working_mf_interest$Fiscal_Year)
+max <- max(working_mf_interest$Fiscal_Year)
+total <- ranges <- data.frame(matrix(ncol=(max - min + 1), nrow=0))
+colnames(total) <- c('Fiscal Year', 'Total_GLP')
+
+
+ggplot(working_mf_interest, aes(x=Fiscal_Year, y=Gross_Loan_Portfolio)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min(working_mf_interest$Fiscal_Year), max(working_mf_interest$Fiscal_Year), by=1)) +
+  labs(title = "Gross Loan Portfolios Over Time Across all MFIs")
+  
+```
 
 
 REGRESSIONS FROM HERE AND BELOW
 ```{r}
-library(lfe)
-
 #basic model, no fixed effects
 basic_linear <- lm(Ratio_GLP_Female ~ Gross_Loan_Portfolio, data=mf_interest)
 summary(basic_linear)
@@ -225,33 +264,76 @@ ir_log_inst_step2 <- lm(Ratio_GLP_Female ~ log(predicted_GLP), data = working_mf
 summary(ir_log_inst_step2)
 ```
 ```{r}
-#instrumental variable and fixed effects
-fe_instrument <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | MFI_Name + Fiscal_Year | (Gross_Loan_Portfolio ~ Cur_Interest_Rate) | MFI_Name, working_mf_interest)
-summary(fe_instrument)
+summary(mf_interest$Percent_of_female_borrowers)
+sd(mf_interest$Percent_of_female_borrowers)
+summary(mf_interest$Gross_Loan_Portfolio)
+sd(mf_interest$Gross_Loan_Portfolio)
+sd(log(mf_interest$Gross_Loan_Portfolio))
+
 ```
 
-This is the main regression I use
-Includes both time and MFI fixed effects and interest rate as an instumental variable
 ```{r}
-#use this!!!
+#percent is from 0 to 1
 
-#ALSO include mfi and time fixed effects
-fe_inst_1 <- felm(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | MFI_Name + Fiscal_Year | 0 | MFI_Name, working_mf_interest)
+time_mfi_fe <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | MFI_Name + Fiscal_Year | 0 | MFI_Name, mf_interest)
+summary(time_mfi_fe)
+
+time_region_fe <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | Country.x + Fiscal_Year | 0 | MFI_Name, mf_interest)
+summary(time_region_fe)
+
+#include region fixed effects
+time_region_fe <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | Region + Fiscal_Year | 0 | MFI_Name, mf_interest)
+summary(time_region_fe)
+
+```
+
+
+
+This is the main regression I use
+Includes both time and MFI fixed effects and interest rate as an instrumental variable
+
+```{r}
+working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
+
+fe_inst_1 <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest, )
 summary(fe_inst_1)
 
-#fe_inst_1 <- lm(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate, data=working_mf_interest)
-#summary(fe_inst_1)
-working_mf_interest$predicted_GLP <- predict(fe_inst_1)
+working_mf_interest$predicted_log_GLP <- predict(fe_inst_1, new_data=working_mf_interest$predicted_log_GLP)
 
-fe_inst_2 <- felm(working_mf_interest$Ratio_GLP_Female ~ working_mf_interest$predicted_GLP | MFI_Name + Fiscal_Year | 0 | MFI_Name, working_mf_interest)
+fe_inst_2 <- feols(Ratio_GLP_Female ~ predicted_log_GLP | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest)
+summary(fe_inst_2)
+```
 
+```{r}
+#first stage here is weak so second stage isn't working, fixed effects are doing everything
+working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
 
-#ir_log_inst_step2 <- lm(Ratio_GLP_Female ~ log(predicted_GLP), data = working_mf_interest)
-#summary(ir_log_inst_step2)
+fe_inst_1 <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Region + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest, )
+summary(fe_inst_1)
+
+working_mf_interest$predicted_log_GLP <- predict(fe_inst_1, new_data=working_mf_interest$predicted_log_GLP)
+
+fe_inst_2 <- feols(Percent_of_female_borrowers ~ predicted_log_GLP | Region + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest)
+summary(fe_inst_2)
+```
+
+```{r}
+working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
+
+fe_inst_1 <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Country.x + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest, )
+summary(fe_inst_1)
+
+working_mf_interest$predicted_log_GLP <- predict(fe_inst_1, new_data=working_mf_interest$predicted_log_GLP)
+
+fe_inst_2 <- feols(Ratio_GLP_Female ~ predicted_log_GLP | Country.x + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest)
+summary(fe_inst_2)
 ```
 
 ```{r}
 #to run above
 ```
+
+
+
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
