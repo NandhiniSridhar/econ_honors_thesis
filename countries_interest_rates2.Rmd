@@ -19,10 +19,12 @@ library(ggplot2)
 library(fuzzyjoin) #fuzzy matching of strings
 library(lfe) #fixed effects regression
 library(fixest) #fixed effects regression
+library(expss) #tables
 
 #packages
 #lfe - install.packages("lfe")
 #fixest - install.packages("fixest")
+#expss - install.packages("expss)
 ```
 
 DATA CLEANING
@@ -107,7 +109,7 @@ mf_interest %>% drop_na(`Gross_Loan_Portfolio`)
 mf_interest %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
 
 mf_interest$Ratio_GLP_Female = mf_interest$`Gross_Loan_Portfolio_>_Gender_>_Female` / mf_interest$Gross_Loan_Portfolio
-
+mfdata$Ratio_GLP_Female = mfdata$`Gross_Loan_Portfolio_>_Gender_>_Female` / mfdata$Gross_Loan_Portfolio
 ```
 
 ```{r}
@@ -126,6 +128,17 @@ middle_east_north_africa <- c("Algeria", "Bahrain", "Djibouti", "Egypt", "Iran",
 south_asia <- c("Sri Lanka", "Bangladesh", "India", "Afghanistan", "Pakistan", "Bhutan", "Nepal", "Maldives")
 
 north_america <- c("United States", "Canada")
+
+mfdata <- mfdata %>% 
+  mutate(Region = case_when(
+    Country %in% africa ~ 'Sub_Saharan_Africa',
+    Country %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country %in% north_america ~ 'North_America',
+    Country %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country %in% south_asia ~ 'South_Asia',
+    TRUE ~ 'Other'))
 
 mf_interest <- mf_interest %>% 
   mutate(Region = case_when(
@@ -182,7 +195,124 @@ working_mf_interest <- working_mf_interest %>% drop_na("Cur_Interest_Rate")
 #run everything above this to clean and preprocess data
 ```
 
-BACKGROUND INFO + TABLES / DATA EXPLORATION
+TABLES, GRAPHS, AND FIGURES
+
+Tables
+```{r}
+#use for GLP, %women borrowers, %GLP to women over time for all data
+year_totals_all <- data.frame(matrix(ncol=5, nrow=0))
+colnames(year_totals_all) <- c("Fiscal_Year", "Gross_Loan_Portfolio", "Percent_Female_Borrowers", "Fraction_GLP_To_Women", "Number_Female_Borrowers")
+min_year_all <- min(mfdata$Fiscal_Year)
+max_year_all <- max(mfdata$Fiscal_Year)
+
+year_totals <- data.frame(matrix(ncol=5, nrow=0))
+colnames(year_totals) <- c("Fiscal_Year", "Gross_Loan_Portfolio", "Percent_Female_Borrowers", "Fraction_GLP_To_Women", "Number_Female_Borrowers")
+min_year <- min(working_mf_interest$Fiscal_Year)
+max_year <- max(working_mf_interest$Fiscal_Year)
+
+
+
+
+#stats by year for all data
+row <- 1
+for(i in min_year_all:max_year_all){
+  year_totals_all[row, "Fiscal_Year"] <- i
+  temp <- mfdata %>% filter(Fiscal_Year == i)
+  temp <- temp %>% drop_na(Gross_Loan_Portfolio)
+  temp <- temp %>% drop_na(Percent_of_female_borrowers)
+  temp <- temp %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+  temp <- temp %>% drop_na(Ratio_GLP_Female)
+
+
+  #print(drop_na(temp$Gross_Loan_Portfolio) %>% mean())
+  year_totals_all[row, "Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals_all[row, "Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals_all[row, "Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals_all[row, "Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  row = row + 1
+}
+
+#stats by year for working data
+row <- 1
+for(i in min_year:max_year){
+  year_totals[row, "Fiscal_Year"] <- i
+  temp <- working_mf_interest %>% filter(Fiscal_Year == i)
+  year_totals[row, "Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals[row, "Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals[row, "Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals[row, "Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  row = row + 1
+}
+
+print(year_totals_all)
+print(year_totals)
+```
+```{r}
+#stats for entire dataset
+mfdata_no_null <- mfdata %>% drop_na(Gross_Loan_Portfolio)
+mfdata_no_null <- mfdata_no_null %>% drop_na(Percent_of_female_borrowers)
+mfdata_no_null <- mfdata_no_null %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+mfdata_no_null <- mfdata_no_null %>% drop_na(Ratio_GLP_Female)
+
+mfdata_no_null <- mfdata_no_null %>% apply_labels(
+  Gross_Loan_Portfolio = "Gross Loan Portfolio",
+  Percent_of_female_borrowers = "Percent of Female Borrowers",
+  Ratio_GLP_Female = "Fraction of GLP to Female Borrowers",
+  `Number_of_active_borrowers_>_Gender_>_Female` = "Number of Female Borrowers",
+  Region = "Percent of Data From Regions"
+)
+
+mf_table <- mfdata_no_null %>% 
+  tab_cells(total()) %>%
+  tab_cells(Gross_Loan_Portfolio) %>%
+  tab_stat_mean() %>%
+  tab_cells(Percent_of_female_borrowers) %>%
+  tab_stat_mean() %>%
+  tab_cells(Ratio_GLP_Female) %>%
+  tab_stat_mean() %>%
+  #percent of data from each region
+  tab_cells(Region) %>%
+  tab_stat_cpct() %>%
+  tab_pivot()
+
+
+
+```
+
+
+```{r}
+
+working_mf_interest <- working_mf_interest %>% apply_labels(
+  Gross_Loan_Portfolio = "Gross Loan Portfolio",
+  Percent_of_female_borrowers = "Percent of Female Borrowers",
+  Ratio_GLP_Female = "Fraction of GLP to Female Borrowers",
+  `Number_of_active_borrowers_>_Gender_>_Female` = "Number of Female Borrowers",
+  Region = "Percent of Data From Regions"
+)
+
+working_mf_table <- working_mf_interest %>% 
+  tab_cells(total()) %>%
+  tab_cells(Gross_Loan_Portfolio) %>%
+  tab_stat_mean() %>%
+  tab_cells(Percent_of_female_borrowers) %>%
+  tab_stat_mean() %>%
+  tab_cells(Ratio_GLP_Female) %>%
+  tab_stat_mean() %>%
+  #percent of data from each region
+  tab_cells(Region) %>%
+  tab_stat_cpct() %>%
+  tab_pivot()
+
+#i think this achieves the two column effect with the same summary stats for the diff datasets
+combined_table <- mf_table %>% merge(working_mf_table)
+#working_mf_table
+#mf_table
+combined_table
+
+```
+
+
+Graphs
 ```{r}
 #mfdata - all MIX Market data
 print(length(unique(mfdata$MFI_Name)))
@@ -190,32 +320,34 @@ print(length(unique(mfdata$Country.x)))
 
 ggplot(mfdata, aes(x=Country)) + 
   geom_bar() +
-  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1)) + 
+  labs(title="Number of MFIs Reporting Across All Years, By Country", x="Country", y="Number of MFIs")
+
+ggplot(year_totals_all, aes(x=Fiscal_Year, y=Gross_Loan_Portfolio)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min(year_totals_all$Fiscal_Year), max(year_totals_all$Fiscal_Year), by=1)) +
+  scale_y_continuous(trans='log10') + 
+  labs(title = "Gross Loan Portfolios Over Time Across all MFIs - All Data", x="Fiscal Year", y="Gross Loan Portfolio - Log Scaled")
+  
 ```
 
 ```{r}
-#working data - mfis with interest data fir relevant years
+#working data - mfis with interest data for relevant years
 print(length(unique(working_mf_interest$MFI_Name)))
 print(length(unique(working_mf_interest$Country.x)))
 
 ggplot(working_mf_interest, aes(x=Country.x)) + 
   geom_bar() +
-  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1)) + 
+  labs(title="MFIs") +
+  labs(title="Number of MFIs Reporting Across All Years, By Country", x="Country", y="Number of MFIs")
 
-#use for GLP, %women borrowers, %GLP to women over time for all data
-min <- min(working_mf_interest$Fiscal_Year)
-max <- max(working_mf_interest$Fiscal_Year)
-total <- ranges <- data.frame(matrix(ncol=(max - min + 1), nrow=0))
-colnames(total) <- c('Fiscal Year', 'Total_GLP')
-
-
-ggplot(working_mf_interest, aes(x=Fiscal_Year, y=Gross_Loan_Portfolio)) +
+ggplot(year_totals, aes(x=Fiscal_Year, y=Gross_Loan_Portfolio)) +
   geom_line() +
-  scale_x_continuous(breaks = seq(min(working_mf_interest$Fiscal_Year), max(working_mf_interest$Fiscal_Year), by=1)) +
-  labs(title = "Gross Loan Portfolios Over Time Across all MFIs")
+  scale_x_continuous(breaks = seq(min(year_totals$Fiscal_Year), max(year_totals$Fiscal_Year), by=1)) +
+  labs(title = "Gross Loan Portfolios Over Time Across all MFIs - Working Data", x="Fiscal Year", y="Gross Loan Portfolio")
   
 ```
-
 
 REGRESSIONS FROM HERE AND BELOW
 ```{r}
