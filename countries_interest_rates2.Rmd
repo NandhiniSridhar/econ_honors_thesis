@@ -200,23 +200,26 @@ TABLES, GRAPHS, AND FIGURES
 Tables
 ```{r}
 #use for GLP, %women borrowers, %GLP to women over time for all data
+mfdata_no_null <- mfdata %>% drop_na(Gross_Loan_Portfolio)
+mfdata_no_null <- mfdata_no_null %>% drop_na(Percent_of_female_borrowers)
+mfdata_no_null <- mfdata_no_null %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+mfdata_no_null <- mfdata_no_null %>% drop_na(Ratio_GLP_Female)
+
 year_totals_all <- data.frame(matrix(ncol=5, nrow=0))
-colnames(year_totals_all) <- c("Fiscal_Year", "Gross_Loan_Portfolio", "Percent_Female_Borrowers", "Fraction_GLP_To_Women", "Number_Female_Borrowers")
-min_year_all <- min(mfdata$Fiscal_Year)
-max_year_all <- max(mfdata$Fiscal_Year)
+colnames(year_totals_all) <- c("Fiscal Year", "Average Gross Loan Portfolio", "Average Percent Female Borrowers", "Average Fraction GLP To Women", "Average Number Female Borrowers")
+min_year_all <- min(mfdata_no_null$Fiscal_Year)
+max_year_all <- max(mfdata_no_null$Fiscal_Year)
 
 year_totals <- data.frame(matrix(ncol=5, nrow=0))
-colnames(year_totals) <- c("Fiscal_Year", "Gross_Loan_Portfolio", "Percent_Female_Borrowers", "Fraction_GLP_To_Women", "Number_Female_Borrowers")
+colnames(year_totals) <- c("Fiscal Year", "Average Gross Loan Portfolio", "Average Percent Female Borrowers", "Average Fraction GLP To Women", "Average Number Female Borrowers")
 min_year <- min(working_mf_interest$Fiscal_Year)
 max_year <- max(working_mf_interest$Fiscal_Year)
-
-
 
 
 #stats by year for all data
 row <- 1
 for(i in min_year_all:max_year_all){
-  year_totals_all[row, "Fiscal_Year"] <- i
+  year_totals_all[row, "Fiscal Year"] <- i
   temp <- mfdata %>% filter(Fiscal_Year == i)
   temp <- temp %>% drop_na(Gross_Loan_Portfolio)
   temp <- temp %>% drop_na(Percent_of_female_borrowers)
@@ -225,35 +228,42 @@ for(i in min_year_all:max_year_all){
 
 
   #print(drop_na(temp$Gross_Loan_Portfolio) %>% mean())
-  year_totals_all[row, "Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
-  year_totals_all[row, "Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
-  year_totals_all[row, "Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
-  year_totals_all[row, "Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  year_totals_all[row, "Average Gross Loan Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals_all[row, "Average Percent Female Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals_all[row, "Average Fraction GLP To Women"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals_all[row, "Average Number Female Borrowers"] <- mean(temp$Ratio_GLP_Female)
   row = row + 1
 }
 
 #stats by year for working data
 row <- 1
 for(i in min_year:max_year){
-  year_totals[row, "Fiscal_Year"] <- i
+  year_totals[row, "Fiscal Year"] <- i
   temp <- working_mf_interest %>% filter(Fiscal_Year == i)
-  year_totals[row, "Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
-  year_totals[row, "Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
-  year_totals[row, "Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
-  year_totals[row, "Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  year_totals[row, "Average Gross Loan Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals[row, "Average Percent Female Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals[row, "Average Fraction GLP To Women"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals[row, "Average Number Female Borrowers"] <- mean(temp$Ratio_GLP_Female)
   row = row + 1
 }
 
-print(year_totals_all)
-print(year_totals)
+
+print(year_totals_all %>% setDT())
+print(year_totals %>% setDT())
 ```
 ```{r}
-#stats for entire dataset
-mfdata_no_null <- mfdata %>% drop_na(Gross_Loan_Portfolio)
-mfdata_no_null <- mfdata_no_null %>% drop_na(Percent_of_female_borrowers)
-mfdata_no_null <- mfdata_no_null %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
-mfdata_no_null <- mfdata_no_null %>% drop_na(Ratio_GLP_Female)
+#number of observations in each table I use
+num_obs <- data.frame("Dataframe" = c("Full Dataset", "Full Dataset Without Nulls", "Working Dataset"), Rows=c(nrow(mfdata), nrow(mfdata_no_null), nrow(working_mf_interest)))
+num_obs$"Number of Countries" <- c(length(unique(mfdata$Country)), length(unique(mfdata_no_null$Country)), length(unique(working_mf_interest$Country.x)))
+num_obs$"Number of MFIs" <- c(length(unique(mfdata$MFI_ID)), length(unique(mfdata_no_null$MFI_ID)), length(unique(working_mf_interest$MFI_ID)))
 
+num_obs_table <- setDT(num_obs)
+print(num_obs_table)
+```
+
+
+```{r}
+#stats for entire dataset
 mfdata_no_null <- mfdata_no_null %>% apply_labels(
   Gross_Loan_Portfolio = "Gross Loan Portfolio",
   Percent_of_female_borrowers = "Percent of Female Borrowers",
@@ -263,7 +273,7 @@ mfdata_no_null <- mfdata_no_null %>% apply_labels(
 )
 
 mf_table <- mfdata_no_null %>% 
-  tab_cells(total()) %>%
+  tab_total_label("All MIX Market Data") %>%
   tab_cells(Gross_Loan_Portfolio) %>%
   tab_stat_mean() %>%
   tab_cells(Percent_of_female_borrowers) %>%
@@ -275,6 +285,7 @@ mf_table <- mfdata_no_null %>%
   tab_stat_cpct() %>%
   tab_pivot()
 
+#mf_table
 
 
 ```
@@ -291,7 +302,7 @@ working_mf_interest <- working_mf_interest %>% apply_labels(
 )
 
 working_mf_table <- working_mf_interest %>% 
-  tab_cells(total()) %>%
+  tab_total_label("Working MIX Market Data") %>%
   tab_cells(Gross_Loan_Portfolio) %>%
   tab_stat_mean() %>%
   tab_cells(Percent_of_female_borrowers) %>%
@@ -303,14 +314,13 @@ working_mf_table <- working_mf_interest %>%
   tab_stat_cpct() %>%
   tab_pivot()
 
+
 #i think this achieves the two column effect with the same summary stats for the diff datasets
 combined_table <- mf_table %>% merge(working_mf_table)
 #working_mf_table
 #mf_table
 combined_table
-
 ```
-
 
 Graphs
 ```{r}
@@ -421,9 +431,10 @@ summary(time_region_fe)
 
 
 
-This is the main regression I use
-Includes both time and MFI fixed effects and interest rate as an instrumental variable
+These are the main regressions I use
+Includes both time and cross sectional fixed effects and interest rate as an instrumental variable
 
+Cross sectional fixed effect by MFI
 ```{r}
 working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
 
@@ -436,6 +447,7 @@ fe_inst_2 <- feols(Ratio_GLP_Female ~ predicted_log_GLP | MFI_Name + Fiscal_Year
 summary(fe_inst_2)
 ```
 
+Cross sectional fixed effect by region
 ```{r}
 #first stage here is weak so second stage isn't working, fixed effects are doing everything
 working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
@@ -448,7 +460,7 @@ working_mf_interest$predicted_log_GLP <- predict(fe_inst_1, new_data=working_mf_
 fe_inst_2 <- feols(Percent_of_female_borrowers ~ predicted_log_GLP | Region + Fiscal_Year, cluster="MFI_Name", data=working_mf_interest)
 summary(fe_inst_2)
 ```
-
+Cross sectional fixed effect by country
 ```{r}
 working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
 
@@ -462,7 +474,7 @@ summary(fe_inst_2)
 ```
 
 ```{r}
-#to run above
+# run above for all tables/graphs/analysis
 ```
 
 
