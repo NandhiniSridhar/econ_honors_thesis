@@ -575,7 +575,6 @@ pct_female_FEvsIV <- tbl_stack(
   group_header = c("OLS", "IV")
   ) %>%
   as_gt() %>%
-  add_p()
   gt::tab_style(
     style = gt::cell_text(weight = "bold"),
     locations = gt::cells_row_groups(groups = everything())
@@ -670,10 +669,6 @@ IV coefficients
 ```{r}
 #these are the coefficients on current interest rate in the instrumental variable regressions
 #will show how good the instrument is
-
-#SOMETHING IS WRONG
-#VALUES IN BOTH TABLES ARE THE SAME
-
 
 #Percent of female borrowers
 cur_mfi_iv_pct <- tbl_regression(fe_inst_1_mfi)
