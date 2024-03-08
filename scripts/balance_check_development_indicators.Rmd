@@ -1,0 +1,298 @@
+---
+title: "balance_check_development_indicators"
+output: html_document
+date: "2024-02-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(fuzzyjoin) #fuzzy matching of strings
+library(lfe) #fixed effects regression
+library(fixest) #fixed effects regression
+library(expss) #tables
+library(gtsummary) #output regression results to table
+library(stringr)
+```
+
+```{r}
+all_indicators <- read.csv("../data/Microfinance/world_development_indicators/a19140bb-6068-493a-9d27-f24a8b543bea_Data.csv")
+all_indicators$Series.Name <- gsub(' ', '_', all_indicators$Series.Name)
+colnames(all_indicators)[colnames(all_indicators) == 'Country.Name'] <- 'Country'
+
+
+# mf_interest <- mf_interest %>% 
+#   mutate(Region = case_when(
+#     Country.x %in% africa ~ 'Sub_Saharan_Africa',
+#     Country.x %in% east_asia_pacific ~ 'East_Asia_Pacific',
+#     Country.x %in% europe_central_asia ~ 'Europe_Central_Asia',
+#     Country.x %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+#     Country.x %in% north_america ~ 'North_America',
+#     Country.x %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+#     Country.x %in% south_asia ~ 'South_Asia',
+#     TRUE ~ 'Other'))
+
+
+```
+
+
+
+ALL of the normal dataframes/data
+DATA CLEANING
+```{r}
+setwd("/Users/NandhiniSridhar/Desktop/econ_honors_thesis")
+mfdata <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/mix-market-financial-performance-dataset-in-usd.xlsx")
+#View(mfdata)
+
+country_data <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/COUNTRY_CODEBOOKmix-market-mfi-company-metadata.xlsx")
+#View(country_data)
+
+names(mfdata) <- gsub(' ', '_', names(mfdata))
+names(country_data) <- gsub(' ', '_', names(country_data))
+
+ir <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/Interest_Rates.xlsx")
+colnames(ir)
+cols <- c("Country", "Scale", "Base Year")
+for (i in 2000:2021){
+  cols <- cols %>% append(i)
+}
+print(cols)
+names(ir) <- cols
+ir <- ir[6:nrow(ir),]
+```
+
+## assign country names to MFI based on codebook
+```{r}
+mfdata['Country'] <- NA
+countries <- c()
+enter <- c()
+ifc <- c()
+elsec <- c()
+names <- c()
+
+#get the countries of each bank in the mfi dataset
+for (i in 1:nrow(mfdata)) {
+  mfi_name <- mfdata$MFI_Name[i]
+  enter <- enter %>% append(1)
+  
+  if(mfi_name %in% country_data$MFI_Name){
+    ifc <- ifc %>% append(1)
+    country_name <- country_data$Country[country_data$MFI_Name == mfi_name]
+    names <- names %>% append(length(country_name))
+    countries <- countries %>% append(country_name)
+    #mfdata[i, 'country'] <- country_name
+  }
+  else{
+    elsec <- elsec %>% append(1)
+    countries <- countries %>% append("NOT FOUND")
+  }
+}
+
+# get rid of ones with multiple countries (would have repeats of the same country for some reason)
+names2 <- c()
+for(i in 1:length(names)){
+  if(names[i] == 2){
+    names2 <- names2 %>% append(1)
+    cat(names[i], ": ", countries[i], "\n")
+    countries <- countries[-i]
+  }
+}
+
+#append to mfi dataset
+mfdata$Country <- countries
+```
+```{r}
+print(nrow(mfdata))
+mfdata <- mfdata %>% drop_na("Gross_Loan_Portfolio")
+mfdata <- mfdata %>% drop_na("Percent_of_female_borrowers")
+mfdata <- mfdata %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
+print(nrow(mfdata))
+
+mfdata$Ratio_GLP_Female = mfdata$`Gross_Loan_Portfolio_>_Gender_>_Female` / mfdata$Gross_Loan_Portfolio
+print(nrow(mfdata))
+mfdata <- mfdata %>% filter(Ratio_GLP_Female <= 1)
+```
+
+## Combine interest rate and mfi data
+```{r}
+#arrange by MFI name and fiscal year
+mfdata <- mfdata %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+#mfdata['country_reduced'] <- gsub(",.*", "", mfdata$country)
+#mfdata['country_reduced'] <- gsub("\\(.*", "", mfdata$country)
+#names(country_data) <- gsub(' ', '_', names(country_data))
+
+mf_interest <- stringdist_join(mfdata, ir, 
+                by='Country', 
+                mode='left',
+                method = "soundex") %>%
+  arrange(Country.x)
+
+
+#Ratio_GLP_Female is the y variable - the percentage of loan money that goes to women borrowers
+mf_interest %>% drop_na(`Gross_Loan_Portfolio`)
+mf_interest %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
+
+mf_interest$Ratio_GLP_Female = mf_interest$`Gross_Loan_Portfolio_>_Gender_>_Female` / mf_interest$Gross_Loan_Portfolio
+
+colnames(mf_interest)[colnames(mf_interest) == 'Country.x'] <- 'Country'
+colnames(mf_interest)[colnames(mf_interest) == 'Country.y'] <- 'Country_ir'
+
+
+```
+
+Getting the current interest rate
+```{r}
+mf_interest$Cur_Interest_Rate = 9999 #this is the error code
+
+
+for(i in 1:nrow(mf_interest)){
+  year = mf_interest$Fiscal_Year[i]
+  if(mf_interest$Fiscal_Year[i] != 1999){
+    if(mf_interest[i, as.character(year)] != "..." & !is.na(mf_interest[i, as.character(year)]) & mf_interest[i, as.character(year)] != "-"){
+      #print(i)
+      #print(mf_interest[i, as.character(year)])
+      mf_interest$Cur_Interest_Rate[i] <- mf_interest[i, as.character(year)]
+    }
+  }
+  #if(suppressWarnings(is.na(as.numeric(mf_interest$Cur_Interest_Rate))[i])){
+  #  print(mf_interest$Cur_Interest_Rate[i])
+  #}
+}
+#unique(mf_interest$Cur_Interest_Rate)
+
+mf_interest$Cur_Interest_Rate <- as.numeric(mf_interest$Cur_Interest_Rate)
+```
+
+```{r}
+years <- str_extract_all(colnames(all_indicators), '[[:digit:]]')
+#cols 5 - 25 are years - 8 character lists where 4 digit years are represented as a series of 4 characters, repeated twice 
+
+#extract first 4 elems of these list elements, turn to one string, and convert to number
+year_vec = c()
+for(i in 5:25){
+  #print(years[[i]])
+  year_str <- paste(years[[i]][1:4], collapse="") #collapse arg needed to make all the digits one string
+  #year_str <- paste("indicator_",year_str, sep="") #sep arg needed to get rid of auto space between argument strings
+  print(year_str)
+  year_vec <- year_vec %>% append(year_str)
+}
+
+year_vec
+
+colnames(all_indicators)[5:25] <- year_vec
+colnames(all_indicators)
+```
+
+
+## Combine development indicator data with mfi and interest rate data 
+
+```{r}
+mf_indicators_interest <- stringdist_join(mf_interest, all_indicators,
+                by='Country', 
+                mode='left',
+                method = "soundex") %>%
+  arrange(Country.x)
+```
+
+```{r}
+#encode by region
+#encode by region
+#World Bank region classifications: Africa, East Asia & the Pacific, Europe & Central Asia, Latin America & The Caribbean, Middle East & North Africa, South Asia
+africa <- c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cameroon", "Cabo Verde", "Central African Republic", "Chad", "Comoros", "Cote d'Ivore", "Cote d'Ivoire (Ivory Coast)", "Cote d'Ivoire","Congo", "Congo, Democratic Republic of the","Congo, Republic of the", "Equitorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Ghana", "Gambia", "Gambia, The", "Guinea", "Guinea-Bissau", "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritus", "Mozambique", "Nambia", "Niger", "Nigeria", "Rwanda", "Senegal", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe", "Namibia", "Swaziland", "Congo, Dem. Rep.", "Equatorial Guinea", "Congo, Rep.")
+
+east_asia_pacific <- c("Cambodia", "China", "China, People's Republic of", "Indonesia", "Korea", "Lao PDR", "Malaysia", "Mongolia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam", "East Timor", "Laos", "Myanmar (Burma)", "Samoa", "Solomon Islands", "Tonga", "Vanuatu", "Japan", "Hong Kong SAR, China", "Korea, Dem. People's Rep.", "Viet Nam", "Brunei Darussalam")
+
+europe_central_asia <- c("Albania", "Armenia", "Azerbaijan", "Belarus", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Georgia", "Hungary", "Kazakhstan", "Kosovo", "Kyrgyzstan", "Moldova", "Montenegro", "Macedonia", "Poland", "Romania", "Russia", "Serbia", "Tajikistan", "Turkey", "Turkmenistan", "Ukraine", "Uzbekistan", "Slovakia", "Belgium", "Cyprus", "Denmark", "Estonia", "Finland", "Gibraltar", "Greenland", "Liechtenstein", "Luxembourg", "Malta", "Central Europe and the Baltics", "Greece", "Turkiye", "Sweden", "Kyrgyz Republic")
+
+latin_america_caribbean <- c("Argentina", "Belize", "Bolivia", "Brazil", "Colombia", "Chile", "Costa Rica", "Dominican Republic", "Ecuador", "El Salvador", "Grenada", "Guatemala", "Guyana", "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua", "Panama", "Paraguay", "Peru", "Saint Lucia", "Suriname", "Trinidad and Tobago", "Uruguay", "Venezuela", "Fiji", "Antigua and Barbuda", "British Virgin Islands", "Bermuda", "Cayman Islands", "Cuba", "Venezuela, RB", "Dominica")
+
+middle_east_north_africa <- c("Algeria", "Bahrain", "Djibouti", "Egypt", "Iran", "Iraq", "Jordan", "Kuwait", "Lebanon", "Libya", "Morocco", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "Tunisia", "United Arab Emirates", "Yemen", "Israel", "Egypt, Arab Rep.", "Iran, Islamic Rep.", "Mauritania")
+
+south_asia <- c("Sri Lanka", "Bangladesh", "India", "Afghanistan", "Pakistan", "Bhutan", "Nepal", "Maldives")
+
+north_america <- c("United States", "Canada", "American Samoa")
+
+australia_oceania <- c("Austalia", "French Polynesia", "Micronesia, Fed. Sts.", "Guam")
+
+mf_indicators_interest <- mf_indicators_interest %>% 
+  mutate(Region = case_when(
+    Country.y %in% africa ~ 'Sub_Saharan_Africa',
+    Country.y %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country.y %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country.y %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country.y %in% north_america ~ 'North_America',
+    Country.y %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country.y %in% south_asia ~ 'South_Asia',
+    Country.y %in% australia_oceania ~ 'Austalia_Oceania',
+    TRUE ~ 'Other'))
+
+mfdata <- mfdata %>% 
+  mutate(Region = case_when(
+    Country %in% africa ~ 'Sub_Saharan_Africa',
+    Country %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country %in% north_america ~ 'North_America',
+    Country %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country %in% south_asia ~ 'South_Asia',
+    Country %in% australia_oceania ~ 'Austalia_Oceania',
+    TRUE ~ 'Other'))
+
+
+x <- mf_indicators_interest %>% filter(Region == "Other")
+print(unique(x$Country.y))
+
+colnames(mf_indicators_interest)[colnames(mf_indicators_interest) == 'Country.y'] <- 'Country'
+
+```
+
+
+```{r}
+working_mf_interest_all <- mf_indicators_interest %>% drop_na("Gross_Loan_Portfolio")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Ratio_GLP_Female")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Percent_of_female_borrowers")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Region")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Country")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Country_ir")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Country.x")
+working_mf_interest_all <- working_mf_interest_all %>% drop_na("Fiscal_Year")
+
+
+
+working_mf_interest_all <- working_mf_interest_all %>% filter(Cur_Interest_Rate != 9999)
+working_mf_interest_all<- working_mf_interest_all %>% drop_na("Cur_Interest_Rate")
+working_mf_interest_all <- working_mf_interest_all %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
+```
+
+```{r}
+indicators <- unique(working_mf_interest_all$Series.Name)
+indicators
+
+for(i in indicators){
+  working_mf_interest_all[, i] <- 9999 #error code
+}
+```
+
+```{r}
+# in each row, get the fiscal year and get the series name
+# then get the series value at the given year
+# assign this value into the corresponding indicator column (ones added above)
+
+for(i in 1:nrow(working_mf_interest_all)){
+  year <- working_mf_interest_all[i, "Fiscal_Year"] #get the fiscal year
+  series <- working_mf_interest_all[i, "Series.Name"] #get the dev indicator in that row
+  year_col <- paste(year, ".y", sep="") #[year].y refers to dev indicator value at given year
+  
+  value <- working_mf_interest_all[i, year_col] #get series value
+  #print(value)
+  #working_mf_interest_all[i, series] <- value #assign to column
+}
+```
+

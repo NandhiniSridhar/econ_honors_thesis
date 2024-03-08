@@ -1,0 +1,504 @@
+---
+title: "robustness_checks_pt2"
+output: html_document
+date: "2024-02-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(fuzzyjoin) #fuzzy matching of strings
+library(lfe) #fixed effects regression
+library(fixest) #fixed effects regression
+library(expss) #tables
+library(gtsummary) #output regression results to table
+
+
+#packages
+#lfe - install.packages("lfe")
+#fixest - install.packages("fixest")
+#expss - install.packages("expss)
+#gtsummary - install.packages("gtsummary")
+
+```
+
+DATA CLEANING
+```{r}
+setwd("/Users/NandhiniSridhar/Desktop/econ_honors_thesis")
+mfdata <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/mix-market-financial-performance-dataset-in-usd.xlsx")
+#View(mfdata)
+
+country_data <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/COUNTRY_CODEBOOKmix-market-mfi-company-metadata.xlsx")
+#View(country_data)
+
+names(mfdata) <- gsub(' ', '_', names(mfdata))
+names(country_data) <- gsub(' ', '_', names(country_data))
+
+ir <- read_excel("/Users/NandhiniSridhar/Desktop/econ_honors_thesis/data/Microfinance/Interest_Rates.xlsx")
+colnames(ir)
+cols <- c("Country", "Scale", "Base Year")
+for (i in 2000:2021){
+  cols <- cols %>% append(i)
+}
+print(cols)
+names(ir) <- cols
+ir <- ir[6:nrow(ir),]
+```
+
+```{r}
+mfdata['Country'] <- NA
+countries <- c()
+enter <- c()
+ifc <- c()
+elsec <- c()
+names <- c()
+
+#get the countries of each bank in the mfi dataset
+for (i in 1:nrow(mfdata)) {
+  mfi_name <- mfdata$MFI_Name[i]
+  enter <- enter %>% append(1)
+  
+  if(mfi_name %in% country_data$MFI_Name){
+    ifc <- ifc %>% append(1)
+    country_name <- country_data$Country[country_data$MFI_Name == mfi_name]
+    names <- names %>% append(length(country_name))
+    countries <- countries %>% append(country_name)
+    #mfdata[i, 'country'] <- country_name
+  }
+  else{
+    elsec <- elsec %>% append(1)
+    countries <- countries %>% append("NOT FOUND")
+  }
+}
+
+# get rid of ones with multiple countries (would have repeats of the same country for some reason)
+names2 <- c()
+for(i in 1:length(names)){
+  if(names[i] == 2){
+    names2 <- names2 %>% append(1)
+    cat(names[i], ": ", countries[i], "\n")
+    countries <- countries[-i]
+  }
+}
+
+#append to mfi dataset
+mfdata$Country <- countries
+```
+```{r}
+print(nrow(mfdata))
+mfdata <- mfdata %>% drop_na("Gross_Loan_Portfolio")
+mfdata <- mfdata %>% drop_na("Percent_of_female_borrowers")
+mfdata <- mfdata %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
+print(nrow(mfdata))
+
+mfdata$Ratio_GLP_Female = mfdata$`Gross_Loan_Portfolio_>_Gender_>_Female` / mfdata$Gross_Loan_Portfolio
+print(nrow(mfdata))
+mfdata <- mfdata %>% filter(Ratio_GLP_Female <= 1)
+```
+
+```{r}
+#arrange by MFI name and fiscal year
+mfdata <- mfdata %>% filter(Period_Type == "ANN") %>% arrange(MFI_Name, Fiscal_Year)
+#mfdata['country_reduced'] <- gsub(",.*", "", mfdata$country)
+#mfdata['country_reduced'] <- gsub("\\(.*", "", mfdata$country)
+#names(country_data) <- gsub(' ', '_', names(country_data))
+
+mf_interest <- stringdist_join(mfdata, ir, 
+                by='Country', 
+                mode='left',
+                method = "soundex") %>%
+  arrange(Country.x)
+
+
+#Ratio_GLP_Female is the y variable - the percentage of loan money that goes to women borrowers
+mf_interest %>% drop_na(`Gross_Loan_Portfolio`)
+mf_interest %>% drop_na(`Gross_Loan_Portfolio_>_Gender_>_Female`)
+
+mf_interest$Ratio_GLP_Female = mf_interest$`Gross_Loan_Portfolio_>_Gender_>_Female` / mf_interest$Gross_Loan_Portfolio
+```
+
+```{r}
+#encode by region
+#World Bank region classifications: Africa, East Asia & the Pacific, Europe & Central Asia, Latin America & The Caribbean, Middle East & North Africa, South Asia
+africa <- c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cameroon", "Cabo Verde", "Central African Republic", "Chad", "Comoros", "Cote d'Ivore", "Cote d'Ivoire (Ivory Coast)", "Congo", "Congo, Democratic Republic of the","Congo, Republic of the", "Equitorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Ghana", "Gambia", "Gambia, The", "Guinea", "Guinea-Bissau", "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritus", "Mozambique", "Nambia", "Niger", "Nigeria", "Rwanda", "Senegal", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe", "Namibia", "Swaziland")
+
+east_asia_pacific <- c("Cambodia", "China", "China, People's Republic of", "Indonesia", "Korea", "Lao PDR", "Malaysia", "Mongolia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam", "East Timor", "Laos", "Myanmar (Burma)", "Samoa", "Solomon Islands", "Tonga", "Vanuatu")
+
+europe_central_asia <- c("Albania", "Armenia", "Azerbaijan", "Belarus", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Georgia", "Hungary", "Kazakhstan", "Kosovo", "Kyrgyzstan", "Moldova", "Montenegro", "Macedonia", "Poland", "Romania", "Russia", "Serbia", "Tajikistan", "Turkey", "Turkmenistan", "Ukraine", "Uzbekistan", "Slovakia")
+
+latin_america_caribbean <- c("Argentina", "Belize", "Bolivia", "Brazil", "Colombia", "Chile", "Costa Rica", "Dominican Republic", "Ecuador", "El Salvador", "Grenada", "Guatemala", "Guyana", "Haiti", "Honduras", "Jamaica", "Mexico", "Nicaragua", "Panama", "Paraguay", "Peru", "Saint Lucia", "Suriname", "Trinidad and Tobago", "Uruguay", "Venezuela", "Fiji")
+
+middle_east_north_africa <- c("Algeria", "Bahrain", "Djibouti", "Egypt", "Iran", "Iraq", "Jordan", "Kuwait", "Lebanon", "Libya", "Morocco", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "Tunisia", "United Arab Emirates", "Yemen", "Israel")
+
+south_asia <- c("Sri Lanka", "Bangladesh", "India", "Afghanistan", "Pakistan", "Bhutan", "Nepal", "Maldives")
+
+north_america <- c("United States", "Canada")
+
+mfdata <- mfdata %>% 
+  mutate(Region = case_when(
+    Country %in% africa ~ 'Sub_Saharan_Africa',
+    Country %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country %in% north_america ~ 'North_America',
+    Country %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country %in% south_asia ~ 'South_Asia',
+    TRUE ~ 'Other'))
+
+mf_interest <- mf_interest %>% 
+  mutate(Region = case_when(
+    Country.x %in% africa ~ 'Sub_Saharan_Africa',
+    Country.x %in% east_asia_pacific ~ 'East_Asia_Pacific',
+    Country.x %in% europe_central_asia ~ 'Europe_Central_Asia',
+    Country.x %in% middle_east_north_africa ~ 'Middle_East_North_Africa',
+    Country.x %in% north_america ~ 'North_America',
+    Country.x %in% latin_america_caribbean ~ 'Latin_America_Caribbean',
+    Country.x %in% south_asia ~ 'South_Asia',
+    TRUE ~ 'Other'))
+
+x <- mf_interest %>% filter(Region == "Other") %>% select(Country.x)
+print(unique(x))
+```
+
+```{r}
+# instrumental variable is the interest rate for a given year
+# here i create the variable that can be used as a common instrument (interest rates are originally split one year per column)
+# here i only take the interest rate that directly corresponds to the fiscal year for a given entry
+
+mf_interest$Cur_Interest_Rate = 9999 #this is the error code
+
+
+for(i in 1:nrow(mf_interest)){
+  year = mf_interest$Fiscal_Year[i]
+  if(mf_interest$Fiscal_Year[i] != 1999){
+    if(mf_interest[i, as.character(year)] != "..." & !is.na(mf_interest[i, as.character(year)]) & mf_interest[i, as.character(year)] != "-"){
+      #print(i)
+      #print(mf_interest[i, as.character(year)])
+      mf_interest$Cur_Interest_Rate[i] <- mf_interest[i, as.character(year)]
+    }
+  }
+  #if(suppressWarnings(is.na(as.numeric(mf_interest$Cur_Interest_Rate))[i])){
+  #  print(mf_interest$Cur_Interest_Rate[i])
+  #}
+}
+#unique(mf_interest$Cur_Interest_Rate)
+
+mf_interest$Cur_Interest_Rate <- as.numeric(mf_interest$Cur_Interest_Rate)
+```
+
+```{r}
+mf_interest <- mf_interest %>% drop_na("Gross_Loan_Portfolio")
+mf_interest <- mf_interest %>% drop_na("Ratio_GLP_Female")
+mf_interest <- mf_interest %>% drop_na("Percent_of_female_borrowers")
+
+
+working_mf_interest <- mf_interest %>% filter(Cur_Interest_Rate != 9999)
+working_mf_interest <- working_mf_interest %>% drop_na("Cur_Interest_Rate")
+working_mf_interest <- working_mf_interest %>% filter(Region == "South_Asia" | Region == "Latin_America_Caribbean" | Region == "Sub_Saharan_Africa")
+```
+
+```{r}
+#run everything above this to clean and preprocess data
+```
+
+# Run with only data 2006-2017
+
+```{r}
+working_no_2019 <- working_mf_interest %>% filter(Fiscal_Year < 2018 & Fiscal_Year > 2006)
+```
+
+## Now we run the same regressions and make the same tables
+
+
+```{r}
+working_no_2019 <- working_no_2019 %>% apply_labels(
+  Gross_Loan_Portfolio = "Gross Loan Portfolio",
+  Percent_of_female_borrowers = "Percent of Female Borrowers",
+  Ratio_GLP_Female = "Fraction of GLP to Female Borrowers",
+  `Number_of_active_borrowers_>_Gender_>_Female` = "Number of Female Borrowers",
+  Region = "Percent of Data From Regions",
+  Cur_Interest_Rate = "Current Interest Rate"
+)
+
+
+```
+
+## Percent of Female Borrowers
+
+```{r}
+basic_linear <- lm(Percent_of_female_borrowers ~ Gross_Loan_Portfolio, data=working_no_2019)
+print(summary(basic_linear))
+
+basic_log <- lm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio), data=working_no_2019)
+print(summary(basic_log))
+```
+
+
+```{r}
+#Fixed effects, no instrument
+time_mfi_fe_pct <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | MFI_Name + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_mfi_fe_pct))
+
+time_country_fe_pct <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | Country.x + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_country_fe_pct))
+
+#include region fixed effects
+time_region_fe_pct <- felm(Percent_of_female_borrowers ~ log(Gross_Loan_Portfolio) | Region + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_region_fe_pct))
+```
+```{r}
+fe_inst_1_mfi <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_no_2019, )
+print(summary(fe_inst_1_mfi))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_mfi, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_mfi <- feols(Percent_of_female_borrowers ~ predicted_log_GLP | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_2_mfi))
+```
+```{r}
+fe_inst_1_country <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Region + Fiscal_Year, cluster="MFI_Name", data=working_no_2019, )
+print(summary(fe_inst_1_country))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_country, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_country <- feols(Percent_of_female_borrowers ~ predicted_log_GLP | Country.x + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_1_country))
+```
+
+```{r}
+fe_inst_1_reg <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Region + Fiscal_Year, cluster="MFI_Name", data=working_no_2019, )
+print(summary(fe_inst_1_reg))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_reg, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_reg <- feols(Percent_of_female_borrowers ~ predicted_log_GLP | Region + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_2_reg))
+```
+
+```{r}
+#Percent of female borrowers
+theme_gtsummary_journal(journal = "qjecon")
+
+mfi_fe_pct <- tbl_regression(time_mfi_fe_pct)
+country_fe_pct <- tbl_regression(time_country_fe_pct)
+region_fe_pct <- tbl_regression(time_region_fe_pct)
+
+mfi_feiv_pct <- tbl_regression(fe_inst_2_mfi)
+country_feiv_pct <- tbl_regression(fe_inst_2_country)
+region_feiv_pct <- tbl_regression(fe_inst_2_reg)
+
+theme_gtsummary_journal(journal = "qjecon")
+
+pct_female_FE <- tbl_merge(
+  tbls = list(mfi_fe_pct, country_fe_pct, region_fe_pct),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+pct_female_FE_IV <- tbl_merge(
+  tbls=list(mfi_feiv_pct, country_feiv_pct, region_feiv_pct),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+
+pct_female_FEvsIV <- tbl_stack(
+  tbls=list(pct_female_FE, pct_female_FE_IV),
+  group_header = c("OLS", "IV")
+  ) %>%
+  as_gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_row_groups(groups = everything())
+  ) %>%
+  gt::tab_header(
+    title=gt::md("**Regression Results for Percent of Female Borrowers**"),
+    subtitle = gt::md("Data 2007-2018")
+  ) %>%
+  gt::fmt_number(
+    columns=everything(),
+    decimals = 4
+  )
+#
+
+# print(rat_female_FEvsIV)
+#
+# print(pct_female_FE)
+# print(pct_female_FE_IV)
+print(pct_female_FEvsIV)
+```
+
+## Fraction of GLP to female borrowers
+```{r}
+#basic model, no fixed effects
+basic_linear <- lm(Ratio_GLP_Female ~ Gross_Loan_Portfolio, data=working_no_2019)
+print(summary(basic_linear))
+
+basic_log <- lm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio), data=working_no_2019)
+print(summary(basic_log))
+```
+
+Only Fixed Effects, no instrument
+```{r}
+#With time and mfi fixed effects
+#the 0 means no instrumental variables
+#what standard error clustering dim do i use (right now doing it by mfi)
+time_mfi_fe_rat <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | MFI_Name + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_mfi_fe_rat))
+
+time_country_fe_rat <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | Country.x + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_country_fe_rat))
+
+#include region fixed effects
+time_region_fe_rat <- felm(Ratio_GLP_Female ~ log(Gross_Loan_Portfolio) | Region + Fiscal_Year | 0 | MFI_Name, working_no_2019)
+print(summary(time_region_fe_rat))
+```
+
+Fixed effects and instrument
+Cross Sectional Fixed Effect by MFI
+```{r}
+
+fe_inst_1_rat_mfi <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_1_rat_mfi))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_rat_mfi, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_rat_mfi <- feols(Ratio_GLP_Female ~ predicted_log_GLP | MFI_Name + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_2_rat_mfi))
+```
+
+Cross Sectional Fixed Effect by Country
+```{r}
+fe_inst_1_rat_country <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Country.x + Fiscal_Year, cluster="MFI_Name", data=working_no_2019, )
+print(summary(fe_inst_1_rat_country))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_rat_country, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_rat_country <- feols(Ratio_GLP_Female ~ predicted_log_GLP | Country.x + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_2_rat_country))
+```
+
+Cross Sectional Fixed Effect by Region
+This seems to be the only one that's nearly statistically significant- the others have very high p vals
+```{r}
+fe_inst_1_rat_reg <- feols(log(Gross_Loan_Portfolio) ~ Cur_Interest_Rate | Region + Fiscal_Year, cluster="MFI_Name", data=working_no_2019, )
+print(summary(fe_inst_1_rat_reg))
+
+working_no_2019$predicted_log_GLP <- predict(fe_inst_1_rat_reg, new_data=working_no_2019$predicted_log_GLP)
+
+fe_inst_2_rat_reg <- feols(Ratio_GLP_Female ~ predicted_log_GLP | Region + Fiscal_Year, cluster="MFI_Name", data=working_no_2019)
+print(summary(fe_inst_2_rat_reg))
+```
+
+```{r}
+#ratio of female borrowers
+#only fixed effects, no instrumented variable
+theme_gtsummary_journal(journal = "qjecon")
+
+mfi_fe_rat <- tbl_regression(time_mfi_fe_rat)
+country_fe_rat <- tbl_regression(time_country_fe_rat)
+region_fe_rat <- tbl_regression(time_region_fe_rat)
+
+#with IV
+mfi_feiv_rat <- tbl_regression(fe_inst_2_rat_mfi)
+country_feiv_rat <- tbl_regression(fe_inst_2_rat_country)
+region_feiv_rat <- tbl_regression(fe_inst_2_rat_reg)
+
+rat_female_FE <- tbl_merge(
+  tbls = list(mfi_fe_rat, country_fe_rat, region_fe_rat),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+rat_female_FE_IV <- tbl_merge(
+  tbls=list(mfi_feiv_rat, country_feiv_rat, region_feiv_rat),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+
+
+rat_female_FEvsIV <- tbl_stack(
+  tbls=list(rat_female_FE, rat_female_FE_IV),
+  group_header = c("OLS", "IV")
+  ) %>%
+  as_gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_row_groups(groups = everything())
+  )%>%
+  gt::tab_header(
+    title=gt::md("**Regression Results for Fraction of GLP to Female Borrowers**"),
+    subtitle = gt::md("Data from 2007-2018")
+  )
+
+
+print(rat_female_FEvsIV)
+```
+IV coefficients
+```{r}
+#these are the coefficients on current interest rate in the instrumental variable regressions
+#will show how good the instrument is
+
+#Percent of female borrowers
+cur_mfi_iv_pct <- tbl_regression(fe_inst_1_mfi)
+cur_country_iv_pct <- tbl_regression(fe_inst_1_country)
+cur_reg_iv_pct <- tbl_regression(fe_inst_1_reg)
+
+pct_cur <- tbl_stack(
+  tbls = list(cur_mfi_iv_pct, cur_country_iv_pct, cur_reg_iv_pct),
+  group_header = c("MFI Fixed Effects", "Country Fixed Effects", "Region Fixed Effects")
+) %>%
+  bold_p() %>%
+  as_gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_row_groups(groups = everything())
+  )%>%
+  gt::tab_header(
+    title=gt::md("**Coefficients on Current Interest Rate**"),
+    subtitle=gt::md("First Step of IV Regression of Percent of Female Borrowers, 2007-2018")
+  ) %>%
+  gt::fmt_number(
+    columns=everything(),
+    decimals = 4
+  )
+
+print(pct_cur)
+
+#Ratio of GLP to female borrowers
+cur_mfi_iv_rat <- tbl_regression(fe_inst_1_rat_mfi)
+cur_country_iv_rat<- tbl_regression(fe_inst_1_rat_country)
+cur_reg_iv_rat <- tbl_regression(fe_inst_1_rat_reg)
+
+rat_cur <- tbl_stack(
+  tbls = list(cur_mfi_iv_rat, cur_country_iv_rat, cur_reg_iv_rat),
+  group_header = c("MFI Fixed Effects", "Country Fixed Effects", "Region Fixed Effects")
+) %>%
+  bold_p() %>%
+  as_gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_row_groups(groups = everything())
+  )%>%
+  gt::tab_header(
+    title=gt::md("**Coefficients on Current Interest Rate**"),
+    subtitle=gt::md("First Step of IV Regression of Ratio of GLP to Female Borrowers, 2007-2018")
+  ) %>%
+  gt::fmt_number(
+    columns=everything(),
+    decimals = 4
+  )
+
+print(rat_cur)
+
+
+```
+
+
+```{r}
+#to run all above
+```
+
