@@ -266,6 +266,109 @@ for(i in min_year:max_year){
 print(year_totals_all %>% setDT())
 print(year_totals %>% setDT())
 ```
+```{r}
+#use for GLP, %women borrowers, %GLP to women over time for all data
+mfdata_ssa <- mfdata %>% drop_na(Gross_Loan_Portfolio) %>% filter(Region == "Sub_Saharan_Africa")
+mfdata_ssa <- mfdata_ssa %>% drop_na(Percent_of_female_borrowers)
+mfdata_ssa <- mfdata_ssa %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+mfdata_ssa <- mfdata_ssa %>% drop_na(Ratio_GLP_Female)
+
+year_totals_ssa <- data.frame(matrix(ncol=6, nrow=0))
+colnames(year_totals_ssa) <- c("Fiscal_Year", "Average_Gross_Loan_Portfolio", "Average_Percent_Female_Borrowers", "Average_Fraction_GLP_To_Women", "Average_Number_Female_Borrowers", "Num_MFIs")
+min_year_ssa <- min(mfdata_ssa$Fiscal_Year)
+max_year_ssa <- max(mfdata_ssa$Fiscal_Year)
+
+ssa_totals <- data.frame(matrix(ncol=6, nrow=0))
+colnames(ssa_totals) <- c("Fiscal_Year", "Average_Gross_Loan_Portfolio", "Average_Percent_Female_Borrowers", "Average_Fraction_GLP_To_Women", "Average_Number_Female_Borrowers", "Num_MFIs")
+min_year <- min(mfdata_ssa$Fiscal_Year)
+max_year <- max(mfdata_ssa$Fiscal_Year)
+
+
+#stats by year for all data
+row <- 1
+for(i in min_year_ssa:max_year_ssa){
+  year_totals_ssa[row, "Fiscal_Year"] <- i
+  temp <- mfdata_ssa %>% filter(Fiscal_Year == i)
+  temp <- temp %>% drop_na(Gross_Loan_Portfolio)
+  temp <- temp %>% drop_na(Percent_of_female_borrowers)
+  temp <- temp %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+  temp <- temp %>% drop_na(Ratio_GLP_Female)
+
+  num_mfi <- nrow(temp)
+  cat(c("temp: ", num_mfi, "\n"))
+  year_totals_ssa[row, "Average_Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals_ssa[row, "Average_Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals_ssa[row, "Average_Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  year_totals_ssa[row, "Average_Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals_ssa[row, "Num_MFIs"] <- num_mfi
+  row = row + 1
+}
+```
+```{r}
+#use for GLP, %women borrowers, %GLP to women over time for all data
+mfdata_lac <- mfdata %>% drop_na(Gross_Loan_Portfolio) %>% filter(Region == "Latin_America_Caribbean")
+mfdata_lac <- mfdata_lac %>% drop_na(Percent_of_female_borrowers)
+mfdata_lac <- mfdata_lac %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+mfdata_lac <- mfdata_lac %>% drop_na(Ratio_GLP_Female)
+
+year_totals_lac <- data.frame(matrix(ncol=6, nrow=0))
+colnames(year_totals_lac) <- c("Fiscal_Year", "Average_Gross_Loan_Portfolio", "Average_Percent_Female_Borrowers", "Average_Fraction_GLP_To_Women", "Average_Number_Female_Borrowers", "Num_MFIs")
+min_year_lac <- min(mfdata_lac$Fiscal_Year)
+max_year_lac <- max(mfdata_lac$Fiscal_Year)
+
+#stats by year for all data
+row <- 1
+for(i in min_year_lac:max_year_lac){
+  year_totals_lac[row, "Fiscal_Year"] <- i
+  temp <- mfdata_lac %>% filter(Fiscal_Year == i)
+  temp <- temp %>% drop_na(Gross_Loan_Portfolio)
+  temp <- temp %>% drop_na(Percent_of_female_borrowers)
+  temp <- temp %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+  temp <- temp %>% drop_na(Ratio_GLP_Female)
+
+  num_mfi <- nrow(temp)
+  cat(c("temp: ", num_mfi, "\n"))
+  year_totals_lac[row, "Average_Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals_lac[row, "Average_Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals_lac[row, "Average_Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  year_totals_lac[row, "Average_Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals_lac[row, "Num_MFIs"] <- num_mfi
+  row = row + 1
+}
+```
+```{r}
+#use for GLP, %women borrowers, %GLP to women over time for all data
+mfdata_sasia <- mfdata %>% drop_na(Gross_Loan_Portfolio) %>% filter(Region == "South_Asia")
+mfdata_sasia <- mfdata_sasia %>% drop_na(Percent_of_female_borrowers)
+mfdata_sasia <- mfdata_sasia %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+mfdata_sasia <- mfdata_sasia %>% drop_na(Ratio_GLP_Female)
+
+year_totals_sasia <- data.frame(matrix(ncol=6, nrow=0))
+colnames(year_totals_sasia) <- c("Fiscal_Year", "Average_Gross_Loan_Portfolio", "Average_Percent_Female_Borrowers", "Average_Fraction_GLP_To_Women", "Average_Number_Female_Borrowers", "Num_MFIs")
+min_year_sasia <- min(mfdata_sasia$Fiscal_Year)
+max_year_sasia <- max(mfdata_sasia$Fiscal_Year)
+
+#stats by year for all data
+row <- 1
+for(i in min_year_sasia:max_year_sasia){
+  year_totals_sasia[row, "Fiscal_Year"] <- i
+  temp <- mfdata_sasia %>% filter(Fiscal_Year == i)
+  temp <- temp %>% drop_na(Gross_Loan_Portfolio)
+  temp <- temp %>% drop_na(Percent_of_female_borrowers)
+  temp <- temp %>% drop_na(`Number_of_active_borrowers_>_Gender_>_Female`)
+  temp <- temp %>% drop_na(Ratio_GLP_Female)
+
+  num_mfi <- nrow(temp)
+  cat(c("temp: ", num_mfi, "\n"))
+  year_totals_sasia[row, "Average_Gross_Loan_Portfolio"] <- mean(temp$Gross_Loan_Portfolio)
+  year_totals_sasia[row, "Average_Percent_Female_Borrowers"] <- mean(temp$Percent_of_female_borrowers)
+  year_totals_sasia[row, "Average_Fraction_GLP_To_Women"] <- mean(temp$Ratio_GLP_Female)
+  year_totals_sasia[row, "Average_Number_Female_Borrowers"] <- mean(temp$`Number_of_active_borrowers_>_Gender_>_Female`)
+  year_totals_sasia[row, "Num_MFIs"] <- num_mfi
+  row = row + 1
+}
+```
+
 
 ```{r}
 #run everything above this to clean and preprocess data
@@ -434,7 +537,7 @@ ggplot(year_totals, aes(x=Fiscal_Year, y=Average_Percent_Female_Borrowers)) +
   geom_line() +
   scale_x_continuous(breaks = seq(min_year_all, max_year_all, by=1)) +
   scale_y_continuous(breaks = seq(0, 1, by=0.1)) + 
-  labs(title = "Average Percentage of Women Over Time Across MFIs - Working Data", x="Fiscal Year", y="Average Fraction of GLP to Female Borrowers")
+  labs(title = "Average Percentage of Female Borrowers Over Time Across MFIs - Working Data", x="Fiscal Year", y="Average Fraction of GLP to Female Borrowers")
   
 ```
 
@@ -445,7 +548,7 @@ ggplot(data=NULL) +
   theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1)) + 
   labs(x="Country", y="Number of MFIs Across Years", title="Number of MFIs Reporting Across Countries, Across All Years") +
   geom_bar(data=working_mf_interest, aes(x=Country.x), fill="black") +
-  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1)) +
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
   
 
 ```
@@ -461,28 +564,68 @@ ggplot(data=NULL) +
   labs(x="Fiscal Year", y="Number of MFIs reporting", title="Number of MFIs reporting per year") +
   scale_x_continuous(breaks = seq(min_all, max_all, by=1)) +
   geom_line(data=year_totals, aes(x=Fiscal_Year, y=Num_MFIs), linetype=2) +
-  labs(x="Fiscal Year", y="Number of MFIs reporting", title="Number of MFIs reporting per year")
-  scale_x_continuous(breaks = seq(min_work, max_work, by=1))
+  labs(x="Fiscal Year", y="Number of MFIs reporting", title="Number of MFIs reporting per year") + 
+  scale_x_continuous(breaks = seq(min_work, max_work, by=1)) +
+  theme(axis.text.x = element_text(size=5, angle = 90, vjust = 1, hjust=1))
 
   
 ```
 
+```{r}
+
+```
+
+```{r}
+ggplot(year_totals_ssa, aes(x=Fiscal_Year, y=Average_Gross_Loan_Portfolio)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min_year_ssa, max_year_ssa, by=1)) +
+  scale_y_continuous(trans='log10') + 
+  labs(title = "Average Gross Loan Portfolios Over Time Across all MFIs - Sub Saharan Africa", x="Fiscal Year", y="Gross Loan Portfolio - Log Scaled")
+
+ggplot(year_totals_lac, aes(x=Fiscal_Year, y=Average_Gross_Loan_Portfolio)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min_year_lac, max_year_lac, by=1)) +
+  scale_y_continuous(trans='log10') + 
+  labs(title = "Average Gross Loan Portfolios Over Time Across all MFIs - Latin America & Caribbean", x="Fiscal Year", y="Gross Loan Portfolio - Log Scaled")
+
+ggplot(year_totals_sasia, aes(x=Fiscal_Year, y=Average_Gross_Loan_Portfolio)) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(min_year_sasia, max_year_sasia, by=1)) +
+  scale_y_continuous(trans='log10') + 
+  labs(title = "Average Gross Loan Portfolios Over Time Across all MFIs - South Asia", x="Fiscal Year", y="Gross Loan Portfolio - Log Scaled")
+```
 
 
 ```{r}
 india <- working_mf_interest %>% filter(Country.x == "India")
 ggplot(india, aes(x=Gross_Loan_Portfolio)) + 
-  geom_density() + 
+  geom_histogram() + 
   labs(title="Density plot of GLP size for Indian MFIs", x="GLP size", y="Frequency")
 
 no_india <- working_mf_interest %>% filter(Country.x != "India")
 
 ggplot(no_india, aes(x=Gross_Loan_Portfolio)) + 
-  geom_density()
-  labs(title="Density plot of GLP size for non-Indian MFIs")
+  geom_histogram() +
+  labs(title="Density plot of GLP size for non-Indian MFIs", x="GLP size", y="Frequency")
+  
+ggplot(data=NULL) +
+  geom_histogram(data=india, aes(x=Gross_Loan_Portfolio), alpha=1, fill='black') + 
+  labs(title="Density plot of GLP size - Indian MFIs Filled", x="GLP size", y="Frequency") +
+  geom_histogram(data=no_india, aes(x=Gross_Loan_Portfolio), alpha=0, color='black')
 
 ```
 ^^ This actually shows that India has a similar spread of GLPs amongst its MFIs compared to the rest of the world
+
+Ranges for GLP for every country:
+```{r}
+for(i in unique(working_mf_interest$Country.x)){
+  temp <- working_mf_interest %>% filter(Country.x == i)
+  print(i)
+  print(summary(temp$Gross_Loan_Portfolio))
+  #cat(i, ": ", summary(temp$Gross_Loan_Portfolio), "\n", sep="")
+}
+```
+
 
 ```{r}
 summary(working_mf_interest$Percent_of_female_borrowers)
@@ -490,6 +633,12 @@ sd(working_mf_interest$Percent_of_female_borrowers)
 summary(working_mf_interest$Gross_Loan_Portfolio)
 sd(working_mf_interest$Gross_Loan_Portfolio)
 sd(log(working_mf_interest$Gross_Loan_Portfolio))
+
+unique_full <- unique(mfdata$Country)
+unique_working <- unique(working_mf_interest$Country.x)
+
+cat("Full dataset: ", length(unique_full), "\n")
+cat("Working dataset: ", length(unique_working))
 
 ```
 
@@ -642,16 +791,16 @@ region_feiv_pct <- tbl_regression(fe_inst_2_reg)
 
 theme_gtsummary_journal(journal = "qjecon")
 
-pct_female_FE <- tbl_merge(
-  tbls = list(mfi_fe_pct, country_fe_pct, region_fe_pct),
-  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
-)
+# pct_female_FE <- tbl_merge(
+#   tbls = list(mfi_fe_pct, country_fe_pct, region_fe_pct),
+#   tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+# )
 
-pct_female_FE_IV <- tbl_merge(
-  tbls=list(mfi_feiv_pct, country_feiv_pct, region_feiv_pct),
-  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
-)
-
+# pct_female_FE_IV <- tbl_merge(
+#   tbls=list(mfi_feiv_pct, country_feiv_pct, region_feiv_pct),
+#   tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+# )
+# 
 # pct_female_FEvsIV <- tbl_merge(
 #   tbls=list(pct_female_FE, pct_female_FE_IV),
 #   tab_spanner = c("OLS", "IV")
@@ -669,6 +818,18 @@ pct_female_FE_IV <- tbl_merge(
 #     decimals = 4
 #   )
   
+pct_female_FE <- tbl_merge(
+  tbls = list(mfi_fe_pct, country_fe_pct, region_fe_pct),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+pct_female_FE_IV <- tbl_merge(
+  tbls=list(mfi_feiv_pct, country_feiv_pct, region_feiv_pct),
+  tab_spanner = c("**MFI Fixed Effects**", "**Country Fixed Effects**", "**Region Fixed Effects**")
+)
+
+
+
 pct_female_FEvsIV <- tbl_stack(
   tbls=list(pct_female_FE, pct_female_FE_IV),
   group_header = c("OLS", "IV")
@@ -677,20 +838,12 @@ pct_female_FEvsIV <- tbl_stack(
   gt::tab_style(
     style = gt::cell_text(weight = "bold"),
     locations = gt::cells_row_groups(groups = everything())
-  ) %>%
+  )%>%
   gt::tab_header(
     title=gt::md("**Regression Results for Percent of Female Borrowers**")
-  ) %>%
-  gt::fmt_number(
-    columns=everything(),
-    decimals = 4
   )
-#
 
-# print(rat_female_FEvsIV)
-#
-# print(pct_female_FE)
-# print(pct_female_FE_IV)
+
 print(pct_female_FEvsIV)
 
 ```
@@ -812,7 +965,7 @@ rat_cur <- tbl_stack(
   )%>%
   gt::tab_header(
     title=gt::md("**Coefficients on Current Interest Rate**"),
-    subtitle=gt::md("First Step of IV Regression of Fraction of GLP to Female Borrowers")
+    subtitle=gt::md("First Step of IV Regression")
   ) %>%
   gt::fmt_number(
     columns=everything(),
